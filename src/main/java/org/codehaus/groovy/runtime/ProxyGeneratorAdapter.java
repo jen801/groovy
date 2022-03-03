@@ -59,6 +59,8 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicLong;
 
+import static org.codehaus.groovy.reflection.ReflectionUtils.isSealed;
+
 /**
  * A proxy generator responsible for mapping a map of closures to a class implementing a list of interfaces. For
  * example, the following code:
@@ -143,7 +145,7 @@ public class ProxyGeneratorAdapter extends ClassVisitor implements Opcodes {
             final ClassLoader proxyLoader,
             final boolean emptyBody,
             final Class delegateClass) {
-        super(CompilerConfiguration.ASM_API_VERSION, new ClassWriter(0));
+        super(CompilerConfiguration.ASM_API_VERSION, new ClassWriter(ClassWriter.COMPUTE_FRAMES | ClassWriter.COMPUTE_MAXS));
         this.loader = proxyLoader != null ? createInnerLoader(proxyLoader, interfaces) : findClassLoader(superClass, interfaces);
         this.visitedMethods = new LinkedHashSet<Object>();
         this.delegatedClosures = closureMap.isEmpty() ? EMPTY_DELEGATECLOSURE_MAP : new HashMap<String, Boolean>();
@@ -170,11 +172,13 @@ public class ProxyGeneratorAdapter extends ClassVisitor implements Opcodes {
         this.superClass = fixedSuperClass;
 
         // create the base list of classes which have possible methods to be overloaded
-        this.classList = new LinkedHashSet<Class>();
+        this.classList = new LinkedHashSet<>();
         this.classList.add(superClass);
         if (generateDelegateField) {
-            classList.add(delegateClass);
-            Collections.addAll(this.classList, delegateClass.getInterfaces());
+            this.classList.add(delegateClass);
+            for (Class i : delegateClass.getInterfaces()) {
+                if (!isSealed(i)) this.classList.add(i);
+            }
         }
         if (interfaces != null) {
             Collections.addAll(this.classList, interfaces);
@@ -183,9 +187,9 @@ public class ProxyGeneratorAdapter extends ClassVisitor implements Opcodes {
         this.emptyBody = emptyBody;
 
         // generate bytecode
-        ClassWriter writer = (ClassWriter) cv;
-        this.visit(Opcodes.V1_5, ACC_PUBLIC, proxyName, null, null, null);
-        byte[] b = writer.toByteArray();
+        int bytecodeVersion = CompilerConfiguration.JDK_TO_BYTECODE_VERSION_MAP.get(CompilerConfiguration.DEFAULT.getTargetBytecode());
+        this.visit(bytecodeVersion, ACC_PUBLIC, proxyName, null, null, null);
+        byte[] b = ((ClassWriter) cv).toByteArray();
 //        CheckClassAdapter.verify(new ClassReader(b), true, new PrintWriter(System.err));
         cachedClass = loader.defineClass(proxyName.replace('/', '.'), b);
         // cache no-arg constructor

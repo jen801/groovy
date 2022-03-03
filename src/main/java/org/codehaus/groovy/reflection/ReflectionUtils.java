@@ -133,6 +133,14 @@ public class ReflectionUtils {
         }
     }
 
+    private static boolean classShouldBeIgnored(final Class c, final Collection<String> extraIgnoredPackages) {
+        return (c != null
+                && (c.isSynthetic()
+                    || (c.getPackage() != null
+                        && (IGNORED_PACKAGES.contains(c.getPackage().getName())
+                          || extraIgnoredPackages.contains(c.getPackage().getName())))));
+    }
+
     public static List<Method> getDeclaredMethods(final Class<?> type, final String name, final Class<?>... parameterTypes) {
         return doGetMethods(type, name, parameterTypes, Class::getDeclaredMethods);
     }
@@ -225,12 +233,12 @@ public class ReflectionUtils {
         }
     }
 
-    private static boolean classShouldBeIgnored(final Class c, final Collection<String> extraIgnoredPackages) {
-        return (c != null
-                && (c.isSynthetic()
-                    || (c.getPackage() != null
-                        && (IGNORED_PACKAGES.contains(c.getPackage().getName())
-                          || extraIgnoredPackages.contains(c.getPackage().getName())))));
+    public static boolean isSealed(Class<?> c) {
+        try {
+            return Boolean.TRUE.equals(Class.class.getMethod("isSealed").invoke(c));
+        } catch (ReflectiveOperationException | SecurityException ignore) {
+        }
+        return false;
     }
 
     private static class ClassContextHelper extends SecurityManager {
